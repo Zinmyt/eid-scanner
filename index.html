@@ -35,29 +35,14 @@
   #reader { background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 12px; position: relative; }
   #reader__scan_region img { display: none; }
 
-  /* LIVE DETECTED CODE BANNER (like iPhone Camera's yellow URL preview) */
-  #detected-banner {
-    background: #ffd84a; color: #1a1a1a;
-    padding: 14px 16px; border-radius: 12px;
-    margin-bottom: 12px; text-align: center;
-    font-weight: 700; display: none;
-    border: 2px solid #f59500;
-    box-shadow: 0 2px 8px rgba(245,149,0,0.3);
-    animation: pulse 1.5s ease-in-out infinite;
-  }
+  #detected-banner { background: #ffd84a; color: #1a1a1a; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px; text-align: center; font-weight: 700; display: none; border: 2px solid #f59500; box-shadow: 0 2px 8px rgba(245,149,0,0.3); animation: pulse 1.5s ease-in-out infinite; }
   #detected-banner.show { display: block; }
   #detected-banner .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; font-weight: 600; margin-bottom: 4px; }
   #detected-banner .code { font-size: 18px; font-family: 'Courier New', monospace; letter-spacing: 1px; word-break: break-all; }
   @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
 
-  #scan-now-btn {
-    display: none; width: 100%; padding: 26px; margin: 0 0 12px 0;
-    font-size: 26px; font-weight: 800; letter-spacing: 1px;
-    color: #fff; border: none; border-radius: 14px; cursor: pointer;
-    background: #555;
-  }
+  #scan-now-btn { display: none; width: 100%; padding: 26px; margin: 0 0 12px 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; color: #fff; border: none; border-radius: 14px; cursor: pointer; background: #555; }
   #scan-now-btn:active { transform: translateY(1px); }
-  #scan-now-btn.busy { background: #888; }
   #scan-now-btn.ready { background: #f59500; box-shadow: 0 4px 12px rgba(245,149,0,0.4); }
   #scan-now-btn.show { display: block; }
 
@@ -70,7 +55,7 @@
   #manual-section button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
   .hint { font-size: 11px; opacity: 0.65; text-align: center; margin-top: 4px; }
 
-  #result-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 30px; z-index: 100; }
+  #result-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 30px; z-index: 100; transition: background 0.2s; }
   #result-overlay.show { display: flex; }
   #result-overlay.ok { background: #1a7f3c; }
   #result-overlay.already { background: #c43030; }
@@ -81,6 +66,9 @@
   #result-detail { font-size: 16px; opacity: 0.95; max-width: 320px; line-height: 1.5; }
   #result-detail code { background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
   #result-tap { margin-top: 28px; font-size: 14px; opacity: 0.8; }
+  /* Subtle hint that we're still confirming with server */
+  #result-overlay .confirming { position: absolute; bottom: 70px; font-size: 11px; opacity: 0.6; }
+  #result-overlay .confirming.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -110,7 +98,7 @@
     <div id="reader" style="display:none;"></div>
 
     <div id="detected-banner">
-      <div class="label">✓ QR detected — tap SCAN to confirm</div>
+      <div class="label">✓ QR detected — tap SCAN</div>
       <div class="code" id="detected-code">—</div>
     </div>
 
@@ -128,6 +116,7 @@
   <div id="result-icon">✓</div>
   <div id="result-title">OK</div>
   <div id="result-detail"></div>
+  <div class="confirming hidden" id="confirming-text">confirming with server…</div>
   <div id="result-tap">Tap to dismiss</div>
 </div>
 
@@ -146,7 +135,6 @@ function playTone(freq, duration, type = 'sine') { try { ensureAudio(); const os
 function beepOk() { playTone(880, 0.15); setTimeout(() => playTone(1320, 0.15), 120); }
 function beepBad() { playTone(220, 0.5, 'square'); }
 function beepUnknown() { playTone(440, 0.3); }
-function beepClick() { playTone(2000, 0.04, 'square'); }
 function beepDetected() { playTone(1500, 0.05); }
 </script>
 
@@ -196,15 +184,31 @@ function bumpCounter() {
   if (!isNaN(s)) sEl.textContent = s + 1;
   if (!isNaN(r) && r > 0) rEl.textContent = r - 1;
 }
+
+function unbumpCounter() {
+  // Reverse the optimistic bump if server says scan was NOT actually ok
+  const sEl = document.getElementById('cnt-scanned');
+  const rEl = document.getElementById('cnt-remaining');
+  const s = parseInt(sEl.textContent, 10);
+  const r = parseInt(rEl.textContent, 10);
+  if (!isNaN(s) && s > 0) sEl.textContent = s - 1;
+  if (!isNaN(r)) rEl.textContent = r + 1;
+}
 </script>
 
 <script>
 let scanner = null;
 let cameraReady = false;
-let scanInProgress = false;
 let lastDecodedCode = null;
 let lastDecodedAt = 0;
 let bannerShownRecently = false;
+
+// Track recently-submitted codes so user can't double-tap the same card
+const recentlySubmitted = new Set();
+function rememberSubmission(code) {
+  recentlySubmitted.add(code);
+  setTimeout(() => recentlySubmitted.delete(code), 3000);
+}
 
 function updateDetectedBanner(code) {
   const banner = document.getElementById('detected-banner');
@@ -231,7 +235,6 @@ function onScanSuccess(decodedText) {
   }
 }
 
-// Clear banner if QR is no longer in frame
 setInterval(() => {
   if (lastDecodedCode && (Date.now() - lastDecodedAt > 1500)) {
     lastDecodedCode = null;
@@ -273,7 +276,7 @@ async function startCameraFlow() {
   btn.style.display = 'none';
   scanBtn.classList.add('show');
   scanBtn.textContent = 'SCAN';
-  setStatus('Aim at QR — code appears in yellow box, then tap SCAN', 'ok');
+  setStatus('Aim at QR — tap SCAN when yellow box appears', 'ok');
 
   if (!window.Html5Qrcode) {
     setStatus('Scanner library failed to load.', 'error');
@@ -298,26 +301,62 @@ async function startCameraFlow() {
   }
 }
 
+// ===== OPTIMISTIC TAP-TO-SCAN =====
+// Show OK immediately; verify with server in background; correct if needed.
 function captureAndScan() {
-  if (scanInProgress) return;
   if (!cameraReady) { setStatus('Camera not ready', 'error'); return; }
   if (!lastDecodedCode || (Date.now() - lastDecodedAt) > 2000) {
     setStatus('No QR in view — aim camera at code', 'error');
     beepUnknown();
     return;
   }
-  const scanBtn = document.getElementById('scan-now-btn');
-  scanBtn.classList.add('busy');
-  scanBtn.textContent = '...';
-  beepClick();
-  setStatus('Checking…');
-  scanInProgress = true;
-  submitCode(lastDecodedCode);
+
+  const code = lastDecodedCode;
+
+  // Prevent double-tap on the same card
+  if (recentlySubmitted.has(code)) {
+    return;
+  }
+  rememberSubmission(code);
+
+  // INSTANT optimistic UI — show OK before server replies
+  showOptimisticOk(code);
+
+  // Clear current code so next scan needs a new QR detection
+  lastDecodedCode = null;
+  updateDetectedBanner(null);
+
+  // Send to server in background — correct UI if result differs
+  submitCodeBackground(code);
 }
 
-async function submitCode(code) {
+function showOptimisticOk(code) {
+  const overlay = document.getElementById('result-overlay');
+  const icon = document.getElementById('result-icon');
+  const title = document.getElementById('result-title');
+  const detail = document.getElementById('result-detail');
+  const confirming = document.getElementById('confirming-text');
+
+  overlay.className = 'show ok';
+  icon.textContent = '✓';
+  title.textContent = 'OK — Give Meat';
+  detail.innerHTML = 'Card: <code>' + code + '</code><br>By: ' + (getStaff() || '');
+  confirming.classList.remove('hidden');  // tiny "confirming..." note at bottom
+
+  beepOk();
+  bumpCounter();
+
+  // Auto-dismiss the optimistic OK after 1.5s
+  setTimeout(() => {
+    if (overlay.classList.contains('ok')) {
+      hideResult();
+    }
+  }, 1500);
+}
+
+async function submitCodeBackground(code) {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) {
-    finishScan({ result: 'error', message: 'Apps Script URL not configured.' });
+    correctResultOverlay({ result: 'error', message: 'Apps Script URL not configured.' });
     return;
   }
   try {
@@ -325,31 +364,65 @@ async function submitCode(code) {
     const resp = await fetch(url, { method: 'GET', redirect: 'follow' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
-    finishScan(json);
+    correctResultOverlay(json);
   } catch (err) {
-    finishScan({ result: 'error', message: err.message || String(err) });
+    correctResultOverlay({ result: 'error', message: err.message || String(err) });
   }
 }
 
-function finishScan(res) {
-  scanInProgress = false;
-  const scanBtn = document.getElementById('scan-now-btn');
-  scanBtn.classList.remove('busy');
-  scanBtn.textContent = 'SCAN';
-  setStatus('Aim at QR — code appears in yellow box, then tap SCAN', 'ok');
-  lastDecodedCode = null;
-  updateDetectedBanner(null);
-  handleResult(res);
+// If server result differs from our optimistic OK, correct the overlay
+function correctResultOverlay(res) {
+  const overlay = document.getElementById('result-overlay');
+  const confirming = document.getElementById('confirming-text');
+
+  // Hide "confirming…" once we have a real answer
+  confirming.classList.add('hidden');
+
+  if (!res || res.result === 'ok') {
+    // Optimistic was correct — nothing to do
+    return;
+  }
+
+  // Server disagreed — show the real result
+  // First reverse the bumped counter (since this scan wasn't actually new)
+  unbumpCounter();
+
+  const icon = document.getElementById('result-icon');
+  const title = document.getElementById('result-title');
+  const detail = document.getElementById('result-detail');
+
+  overlay.className = 'show';
+
+  if (res.result === 'already') {
+    overlay.classList.add('already');
+    icon.textContent = '⚠';
+    title.textContent = 'ALREADY CONTRIBUTED';
+    detail.innerHTML = 'Scanned at:<br><b>' + (res.scannedAt || '') + '</b><br>by ' + (res.scannedBy || '') + '<br><br>Card: <code>' + (res.code || '') + '</code>';
+    beepBad();
+  } else if (res.result === 'invalid') {
+    overlay.classList.add('invalid');
+    icon.textContent = '?';
+    title.textContent = 'INVALID CARD';
+    detail.textContent = res.message || 'This QR code is not in the system.';
+    beepUnknown();
+  } else {
+    overlay.classList.add('error');
+    icon.textContent = '!';
+    title.textContent = 'ERROR';
+    detail.textContent = res.message || 'Unknown error';
+    beepUnknown();
+  }
+  // For error/already, don't auto-dismiss — let staff tap to acknowledge
 }
 
 function submitManual() {
   const v = document.getElementById('manual-input').value.trim();
   if (!v) return;
   document.getElementById('manual-input').value = '';
-  setStatus('Checking…');
-  scanInProgress = true;
-  beepClick();
-  submitCode(v);
+  if (recentlySubmitted.has(v)) return;
+  rememberSubmission(v);
+  showOptimisticOk(v);
+  submitCodeBackground(v);
 }
 
 document.addEventListener('keydown', e => {
@@ -359,50 +432,15 @@ document.addEventListener('keydown', e => {
   }
 });
 
-function handleResult(res) {
-  if (!res) { res = { result: 'error', message: 'Empty response' }; }
-  const overlay = document.getElementById('result-overlay');
-  const icon = document.getElementById('result-icon');
-  const title = document.getElementById('result-title');
-  const detail = document.getElementById('result-detail');
-  overlay.className = '';
-
-  if (res.result === 'ok') {
-    overlay.classList.add('ok', 'show');
-    icon.textContent = '✓';
-    title.textContent = 'OK — Give Meat';
-    detail.innerHTML = 'Card: <code>' + (res.code || '') + '</code><br>By: ' + (res.scannedBy || '');
-    beepOk();
-    bumpCounter();
-    setTimeout(hideResult, 2000);
-  } else if (res.result === 'already') {
-    overlay.classList.add('already', 'show');
-    icon.textContent = '⚠';
-    title.textContent = 'ALREADY CONTRIBUTED';
-    detail.innerHTML = 'Scanned at:<br><b>' + (res.scannedAt || '') + '</b><br>by ' + (res.scannedBy || '') + '<br><br>Card: <code>' + (res.code || '') + '</code>';
-    beepBad();
-  } else if (res.result === 'invalid') {
-    overlay.classList.add('invalid', 'show');
-    icon.textContent = '?';
-    title.textContent = 'INVALID CARD';
-    detail.textContent = res.message || 'This QR code is not in the system.';
-    beepUnknown();
-  } else {
-    overlay.classList.add('error', 'show');
-    icon.textContent = '!';
-    title.textContent = 'ERROR';
-    detail.textContent = res.message || 'Unknown error';
-    beepUnknown();
-  }
+function hideResult() {
+  document.getElementById('result-overlay').classList.remove('show');
 }
-
-function hideResult() { document.getElementById('result-overlay').classList.remove('show'); }
 
 window.addEventListener('load', () => {
   if (getStaff()) { ensureAudio(); prewarmServer(); showScanner(); }
 });
 
-setInterval(() => { if (getStaff() && !scanInProgress) refreshCounter(); }, 30000);
+setInterval(() => { if (getStaff()) refreshCounter(); }, 30000);
 </script>
 
 </body>
