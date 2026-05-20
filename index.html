@@ -10,119 +10,74 @@
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #0d2543;
-    color: #fff;
-    min-height: 100vh;
-    padding-bottom: 30px;
-  }
-  header {
-    background: #0d2543;
-    padding: 10px 16px;
-    border-bottom: 3px solid #f59500;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  header .left { display: flex; align-items: center; gap: 10px; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d2543; color: #fff; min-height: 100vh; padding-bottom: 30px; }
+  header { background: #0d2543; padding: 10px 16px; border-bottom: 3px solid #f59500; display: flex; justify-content: space-between; align-items: center; }
   header h1 { margin: 0; font-size: 16px; font-weight: 700; }
-  header .staff-tag {
-    background: rgba(255,255,255,0.15);
-    padding: 4px 10px; border-radius: 12px;
-    font-size: 12px; cursor: pointer;
-  }
+  header .staff-tag { background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; }
 
-  #counter-bar {
-    background: linear-gradient(90deg, #1a7f3c, #145e2c);
-    padding: 10px 16px;
-    display: flex; justify-content: space-around; align-items: center;
-    font-size: 13px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-  }
+  #counter-bar { background: linear-gradient(90deg, #1a7f3c, #145e2c); padding: 10px 16px; display: flex; justify-content: space-around; align-items: center; font-size: 13px; }
   #counter-bar .c-block { text-align: center; flex: 1; }
   #counter-bar .c-num { font-size: 22px; font-weight: 800; display: block; line-height: 1.1; }
-  #counter-bar .c-label { opacity: 0.85; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #counter-bar .c-label { opacity: 0.85; font-size: 11px; text-transform: uppercase; }
   #counter-bar .c-block.warn .c-num { color: #ffd84a; }
 
   .container { padding: 14px; max-width: 500px; margin: 0 auto; }
 
   #staff-picker { text-align: center; padding: 40px 20px; }
   #staff-picker h2 { margin: 0 0 25px; font-weight: 600; }
-  .staff-btn {
-    display: block; width: 100%; padding: 22px; margin: 12px 0;
-    font-size: 22px; font-weight: 600;
-    background: #1e4480; color: #fff; border: none; border-radius: 12px; cursor: pointer;
-  }
+  .staff-btn { display: block; width: 100%; padding: 22px; margin: 12px 0; font-size: 22px; font-weight: 600; background: #1e4480; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
   .staff-btn:active { background: #0d2543; }
 
-  #start-camera-btn {
-    display: block; width: 100%; padding: 22px; margin: 0 0 14px 0;
-    font-size: 20px; font-weight: 700;
-    background: #1a7f3c; color: #fff; border: none; border-radius: 12px; cursor: pointer;
-  }
+  #start-camera-btn { display: block; width: 100%; padding: 22px; margin: 0 0 14px 0; font-size: 20px; font-weight: 700; background: #1a7f3c; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
   #start-camera-btn:active { background: #145e2c; }
   #start-camera-btn.busy { background: #888; }
 
   #reader { background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 12px; position: relative; }
   #reader__scan_region img { display: none; }
 
-  /* The "SCAN" capture button — shown once camera is running */
-  #scan-now-btn {
-    display: none;
-    width: 100%;
-    padding: 26px;
-    margin: 0 0 12px 0;
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    background: #f59500;
-    color: #fff;
-    border: none;
-    border-radius: 14px;
-    box-shadow: 0 4px 12px rgba(245,149,0,0.4);
-    cursor: pointer;
+  /* LIVE DETECTED CODE BANNER (like iPhone Camera's yellow URL preview) */
+  #detected-banner {
+    background: #ffd84a; color: #1a1a1a;
+    padding: 14px 16px; border-radius: 12px;
+    margin-bottom: 12px; text-align: center;
+    font-weight: 700; display: none;
+    border: 2px solid #f59500;
+    box-shadow: 0 2px 8px rgba(245,149,0,0.3);
+    animation: pulse 1.5s ease-in-out infinite;
   }
-  #scan-now-btn:active { background: #c97800; transform: translateY(1px); }
-  #scan-now-btn.busy { background: #888; box-shadow: none; }
+  #detected-banner.show { display: block; }
+  #detected-banner .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; font-weight: 600; margin-bottom: 4px; }
+  #detected-banner .code { font-size: 18px; font-family: 'Courier New', monospace; letter-spacing: 1px; word-break: break-all; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+
+  #scan-now-btn {
+    display: none; width: 100%; padding: 26px; margin: 0 0 12px 0;
+    font-size: 26px; font-weight: 800; letter-spacing: 1px;
+    color: #fff; border: none; border-radius: 14px; cursor: pointer;
+    background: #555;
+  }
+  #scan-now-btn:active { transform: translateY(1px); }
+  #scan-now-btn.busy { background: #888; }
+  #scan-now-btn.ready { background: #f59500; box-shadow: 0 4px 12px rgba(245,149,0,0.4); }
   #scan-now-btn.show { display: block; }
 
-  #status-msg {
-    background: rgba(255,255,255,0.1);
-    padding: 9px 14px; border-radius: 8px;
-    font-size: 13px; margin-bottom: 12px; word-break: break-word;
-    text-align: center;
-  }
+  #status-msg { background: rgba(255,255,255,0.1); padding: 9px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; word-break: break-word; text-align: center; }
   #status-msg.error { background: rgba(196,48,48,0.4); }
   #status-msg.ok { background: rgba(26,127,60,0.4); }
 
-  #manual-section {
-    background: rgba(255,255,255,0.08); padding: 12px; border-radius: 10px; margin-top: 10px;
-  }
-  #manual-section input {
-    width: 100%; padding: 12px;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(255,255,255,0.08); color: #fff;
-    font-size: 17px; border-radius: 8px; margin-bottom: 8px;
-    text-transform: lowercase;
-  }
-  #manual-section button {
-    width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
-    background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px; cursor: pointer;
-  }
+  #manual-section { background: rgba(255,255,255,0.08); padding: 12px; border-radius: 10px; margin-top: 10px; }
+  #manual-section input { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: #fff; font-size: 17px; border-radius: 8px; margin-bottom: 8px; text-transform: lowercase; }
+  #manual-section button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
   .hint { font-size: 11px; opacity: 0.65; text-align: center; margin-top: 4px; }
 
-  #result-overlay {
-    position: fixed; inset: 0; display: none;
-    align-items: center; justify-content: center; flex-direction: column;
-    text-align: center; padding: 30px; z-index: 100;
-  }
+  #result-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 30px; z-index: 100; }
   #result-overlay.show { display: flex; }
   #result-overlay.ok { background: #1a7f3c; }
   #result-overlay.already { background: #c43030; }
   #result-overlay.invalid { background: #4a4a4a; }
   #result-overlay.error { background: #6b4a00; }
   #result-icon { font-size: 110px; margin-bottom: 16px; line-height: 1; }
-  #result-title { font-size: 38px; font-weight: 800; margin-bottom: 14px; letter-spacing: 0.5px; }
+  #result-title { font-size: 38px; font-weight: 800; margin-bottom: 14px; }
   #result-detail { font-size: 16px; opacity: 0.95; max-width: 320px; line-height: 1.5; }
   #result-detail code { background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
   #result-tap { margin-top: 28px; font-size: 14px; opacity: 0.8; }
@@ -131,26 +86,16 @@
 <body>
 
 <header>
-  <div class="left">
-    <h1>🌙 Eid Scanner</h1>
-  </div>
+  <h1>🌙 Eid Scanner</h1>
   <span class="staff-tag" id="staff-tag" onclick="changeStaff()" style="display:none;"></span>
 </header>
 
-<!-- Live counter bar -->
 <div id="counter-bar" style="display:none;">
-  <div class="c-block">
-    <span class="c-num" id="cnt-scanned">—</span>
-    <span class="c-label">Scanned today</span>
-  </div>
-  <div class="c-block warn">
-    <span class="c-num" id="cnt-remaining">—</span>
-    <span class="c-label">Remaining</span>
-  </div>
+  <div class="c-block"><span class="c-num" id="cnt-scanned">—</span><span class="c-label">Scanned today</span></div>
+  <div class="c-block warn"><span class="c-num" id="cnt-remaining">—</span><span class="c-label">Remaining</span></div>
 </div>
 
 <div class="container">
-
   <div id="staff-picker">
     <h2>Who is scanning?</h2>
     <button class="staff-btn" onclick="setStaff('Staff 1')">Staff 1</button>
@@ -163,6 +108,12 @@
     <div id="status-msg">Tap the green button below to start the camera.</div>
     <button id="start-camera-btn" onclick="startCameraFlow()">📷 Start Camera</button>
     <div id="reader" style="display:none;"></div>
+
+    <div id="detected-banner">
+      <div class="label">✓ QR detected — tap SCAN to confirm</div>
+      <div class="code" id="detected-code">—</div>
+    </div>
+
     <button id="scan-now-btn" onclick="captureAndScan()">SCAN</button>
 
     <div id="manual-section">
@@ -171,7 +122,6 @@
       <div class="hint">Manual entry — fallback if camera doesn't work.</div>
     </div>
   </div>
-
 </div>
 
 <div id="result-overlay" onclick="hideResult()">
@@ -182,54 +132,29 @@
 </div>
 
 <script>
-// =============================================================
-// CONFIGURATION — paste your deployed Apps Script web app URL here.
-// =============================================================
+// ============================================================
+// CONFIGURATION — paste your Apps Script web app URL here.
+// ============================================================
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHYgwo9Wd5NDnpJzhNoy_y0JkVe5SQvttE3pylaOXjzNH6-Ao5Cj-wtZeEISI80lyKxA/exec";
-// =============================================================
+// ============================================================
 </script>
 
 <script>
-// ===== Beep sounds (unchanged from before) =====
 let audioCtx = null;
-function ensureAudio() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  } catch (e) {}
-}
-function playTone(freq, duration, type = 'sine') {
-  try {
-    ensureAudio();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = freq;
-    osc.type = type;
-    gain.gain.value = 0.2;
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(); osc.stop(audioCtx.currentTime + duration);
-  } catch (e) {}
-}
+function ensureAudio() { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }
+function playTone(freq, duration, type = 'sine') { try { ensureAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.frequency.value = freq; osc.type = type; gain.gain.value = 0.2; osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration); } catch (e) {} }
 function beepOk() { playTone(880, 0.15); setTimeout(() => playTone(1320, 0.15), 120); }
 function beepBad() { playTone(220, 0.5, 'square'); }
 function beepUnknown() { playTone(440, 0.3); }
-// Subtle click for "capture taken" feedback (between tap and result)
 function beepClick() { playTone(2000, 0.04, 'square'); }
+function beepDetected() { playTone(1500, 0.05); }
 </script>
 
 <script>
-// ===== Staff =====
 const STAFF_KEY = 'eid_staff_id';
 function getStaff() { return localStorage.getItem(STAFF_KEY); }
-function setStaff(name) {
-  localStorage.setItem(STAFF_KEY, name);
-  ensureAudio();   // user gesture — unlocks audio
-  prewarmServer(); // user gesture — start warming connection
-  showScanner();
-}
-function changeStaff() {
-  if (confirm('Switch staff?')) { localStorage.removeItem(STAFF_KEY); location.reload(); }
-}
+function setStaff(name) { localStorage.setItem(STAFF_KEY, name); ensureAudio(); prewarmServer(); showScanner(); }
+function changeStaff() { if (confirm('Switch staff?')) { localStorage.removeItem(STAFF_KEY); location.reload(); } }
 
 function showScanner() {
   document.getElementById('staff-picker').style.display = 'none';
@@ -243,47 +168,26 @@ function showScanner() {
 
 function setStatus(text, kind) {
   const el = document.getElementById('status-msg');
-  el.textContent = text;
-  el.className = '';
+  el.textContent = text; el.className = '';
   if (kind) el.classList.add(kind);
 }
 
-// ===== Server pre-warming =====
-// First fetch to Apps Script is slow because Google has to "wake up" the script.
-// We do a tiny stats fetch when the user picks staff, so by the time they scan
-// their first card, the script is already warm.
-let serverWarm = false;
 function prewarmServer() {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) return;
-  fetch(APPS_SCRIPT_URL + '?api=stats', { method: 'GET' })
-    .then(r => r.json())
-    .then(data => {
-      serverWarm = true;
-      updateCounters(data);
-    })
-    .catch(() => { /* silent — will retry on first scan */ });
+  fetch(APPS_SCRIPT_URL + '?api=stats').then(r => r.json()).then(data => updateCounters(data)).catch(() => {});
 }
 
 function refreshCounter() {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) return;
-  fetch(APPS_SCRIPT_URL + '?api=stats', { method: 'GET' })
-    .then(r => r.json())
-    .then(data => updateCounters(data))
-    .catch(() => {});
+  fetch(APPS_SCRIPT_URL + '?api=stats').then(r => r.json()).then(data => updateCounters(data)).catch(() => {});
 }
 
 function updateCounters(data) {
   if (!data) return;
-  if (typeof data.scanned !== 'undefined') {
-    document.getElementById('cnt-scanned').textContent = data.scanned;
-  }
-  if (typeof data.remaining !== 'undefined') {
-    document.getElementById('cnt-remaining').textContent = data.remaining;
-  }
+  if (typeof data.scanned !== 'undefined') document.getElementById('cnt-scanned').textContent = data.scanned;
+  if (typeof data.remaining !== 'undefined') document.getElementById('cnt-remaining').textContent = data.remaining;
 }
 
-// Optimistic counter bump — adds 1 immediately on successful scan,
-// so the visible number updates instantly without waiting for next server poll
 function bumpCounter() {
   const sEl = document.getElementById('cnt-scanned');
   const rEl = document.getElementById('cnt-remaining');
@@ -295,20 +199,45 @@ function bumpCounter() {
 </script>
 
 <script>
-// ===== Camera + tap-to-scan =====
 let scanner = null;
 let cameraReady = false;
 let scanInProgress = false;
-let lastDecodedCode = null;     // updated continuously by html5-qrcode
+let lastDecodedCode = null;
 let lastDecodedAt = 0;
+let bannerShownRecently = false;
 
-// html5-qrcode keeps decoding in the background but we DON'T submit automatically.
-// We just remember the most recently seen code, and when the user taps SCAN
-// we submit whatever was most recently in frame.
+function updateDetectedBanner(code) {
+  const banner = document.getElementById('detected-banner');
+  const codeEl = document.getElementById('detected-code');
+  const scanBtn = document.getElementById('scan-now-btn');
+  if (code) {
+    codeEl.textContent = code;
+    banner.classList.add('show');
+    scanBtn.classList.add('ready');
+  } else {
+    banner.classList.remove('show');
+    scanBtn.classList.remove('ready');
+  }
+}
+
 function onScanSuccess(decodedText) {
   lastDecodedCode = decodedText;
   lastDecodedAt = Date.now();
+  updateDetectedBanner(decodedText);
+  if (!bannerShownRecently) {
+    beepDetected();
+    bannerShownRecently = true;
+    setTimeout(() => { bannerShownRecently = false; }, 1500);
+  }
 }
+
+// Clear banner if QR is no longer in frame
+setInterval(() => {
+  if (lastDecodedCode && (Date.now() - lastDecodedAt > 1500)) {
+    lastDecodedCode = null;
+    updateDetectedBanner(null);
+  }
+}, 400);
 
 async function startCameraFlow() {
   const btn = document.getElementById('start-camera-btn');
@@ -320,7 +249,7 @@ async function startCameraFlow() {
   setStatus('Requesting camera permission…');
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setStatus('This browser does not support camera access. Use Safari on iPhone, or Chrome on Android.', 'error');
+    setStatus('Use Safari on iPhone or Chrome on Android.', 'error');
     btn.classList.remove('busy');
     btn.textContent = '📷 Start Camera';
     return;
@@ -328,16 +257,11 @@ async function startCameraFlow() {
 
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } },
-      audio: false
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
   } catch (err) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    } catch (err2) {
-      const msg = (err2 && err2.name) ? err2.name + ': ' + (err2.message || '') : String(err2);
-      setStatus('Camera unavailable (' + msg + '). Use manual entry below.', 'error');
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+    catch (err2) {
+      setStatus('Camera unavailable: ' + (err2.name || err2), 'error');
       btn.classList.remove('busy');
       btn.textContent = '📷 Try Again';
       return;
@@ -348,70 +272,56 @@ async function startCameraFlow() {
   reader.style.display = 'block';
   btn.style.display = 'none';
   scanBtn.classList.add('show');
-  setStatus('Aim at the QR code, then tap SCAN', 'ok');
+  scanBtn.textContent = 'SCAN';
+  setStatus('Aim at QR — code appears in yellow box, then tap SCAN', 'ok');
 
   if (!window.Html5Qrcode) {
-    setStatus('Scanner library failed to load. Check internet and refresh.', 'error');
+    setStatus('Scanner library failed to load.', 'error');
     return;
   }
 
   scanner = new Html5Qrcode("reader");
-  const config = { fps: 10, qrbox: { width: 260, height: 260 }, aspectRatio: 1.0, disableFlip: false };
+  const config = { fps: 15, qrbox: { width: 260, height: 260 }, aspectRatio: 1.0, disableFlip: false };
 
   try {
     await scanner.start({ facingMode: "environment" }, config, onScanSuccess);
     cameraReady = true;
   } catch (err) {
-    try {
-      await scanner.start({ facingMode: "user" }, config, onScanSuccess);
-      cameraReady = true;
-    } catch (err2) {
-      const msg = (err2 && err2.message) ? err2.message : String(err2);
-      setStatus('Camera could not start: ' + msg, 'error');
+    try { await scanner.start({ facingMode: "user" }, config, onScanSuccess); cameraReady = true; }
+    catch (err2) {
+      setStatus('Camera could not start.', 'error');
       btn.style.display = 'block';
       btn.classList.remove('busy');
-      btn.textContent = '📷 Try Again';
       reader.style.display = 'none';
       scanBtn.classList.remove('show');
     }
   }
 }
 
-// === The big SCAN button ===
 function captureAndScan() {
   if (scanInProgress) return;
   if (!cameraReady) { setStatus('Camera not ready', 'error'); return; }
-
+  if (!lastDecodedCode || (Date.now() - lastDecodedAt) > 2000) {
+    setStatus('No QR in view — aim camera at code', 'error');
+    beepUnknown();
+    return;
+  }
   const scanBtn = document.getElementById('scan-now-btn');
   scanBtn.classList.add('busy');
   scanBtn.textContent = '...';
-
-  // Only accept a recent decode (within last 2 seconds) — older means QR is gone
-  if (!lastDecodedCode || (Date.now() - lastDecodedAt) > 2000) {
-    setStatus('No QR detected — aim camera at the code and try again', 'error');
-    beepUnknown();
-    scanBtn.classList.remove('busy');
-    scanBtn.textContent = 'SCAN';
-    return;
-  }
-
-  // Audio click — instant confirmation that the tap was registered
   beepClick();
   setStatus('Checking…');
   scanInProgress = true;
   submitCode(lastDecodedCode);
 }
 
-// ===== Submit to backend =====
 async function submitCode(code) {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) {
-    finishScan({ result: 'error', message: 'Apps Script URL not configured in scanner page.' });
+    finishScan({ result: 'error', message: 'Apps Script URL not configured.' });
     return;
   }
   try {
-    const url = APPS_SCRIPT_URL +
-      '?api=scan&code=' + encodeURIComponent(code) +
-      '&staff=' + encodeURIComponent(getStaff() || '');
+    const url = APPS_SCRIPT_URL + '?api=scan&code=' + encodeURIComponent(code) + '&staff=' + encodeURIComponent(getStaff() || '');
     const resp = await fetch(url, { method: 'GET', redirect: 'follow' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
@@ -426,11 +336,9 @@ function finishScan(res) {
   const scanBtn = document.getElementById('scan-now-btn');
   scanBtn.classList.remove('busy');
   scanBtn.textContent = 'SCAN';
-  setStatus('Aim at the QR code, then tap SCAN', 'ok');
-
-  // Clear cached code so the same one isn't re-submitted on next tap
+  setStatus('Aim at QR — code appears in yellow box, then tap SCAN', 'ok');
   lastDecodedCode = null;
-
+  updateDetectedBanner(null);
   handleResult(res);
 }
 
@@ -488,22 +396,13 @@ function handleResult(res) {
   }
 }
 
-function hideResult() {
-  document.getElementById('result-overlay').classList.remove('show');
-}
+function hideResult() { document.getElementById('result-overlay').classList.remove('show'); }
 
 window.addEventListener('load', () => {
-  if (getStaff()) {
-    ensureAudio();
-    prewarmServer();
-    showScanner();
-  }
+  if (getStaff()) { ensureAudio(); prewarmServer(); showScanner(); }
 });
 
-// Refresh the counter every 30 seconds in case other staff scan
-setInterval(() => {
-  if (getStaff() && !scanInProgress) refreshCounter();
-}, 30000);
+setInterval(() => { if (getStaff() && !scanInProgress) refreshCounter(); }, 30000);
 </script>
 
 </body>
