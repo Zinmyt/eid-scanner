@@ -44,6 +44,7 @@
   #scan-now-btn { display: none; width: 100%; padding: 26px; margin: 0 0 12px 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; color: #fff; border: none; border-radius: 14px; cursor: pointer; background: #555; }
   #scan-now-btn:active { transform: translateY(1px); }
   #scan-now-btn.ready { background: #f59500; box-shadow: 0 4px 12px rgba(245,149,0,0.4); }
+  #scan-now-btn.busy { background: #444; }
   #scan-now-btn.show { display: block; }
 
   #status-msg { background: rgba(255,255,255,0.1); padding: 9px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; word-break: break-word; text-align: center; }
@@ -55,8 +56,9 @@
   #manual-section button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
   .hint { font-size: 11px; opacity: 0.65; text-align: center; margin-top: 4px; }
 
-  #result-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 30px; z-index: 100; transition: background 0.2s; }
+  #result-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 30px; z-index: 100; }
   #result-overlay.show { display: flex; }
+  #result-overlay.checking { background: #2a4a6b; }
   #result-overlay.ok { background: #1a7f3c; }
   #result-overlay.already { background: #c43030; }
   #result-overlay.invalid { background: #4a4a4a; }
@@ -66,9 +68,10 @@
   #result-detail { font-size: 16px; opacity: 0.95; max-width: 320px; line-height: 1.5; }
   #result-detail code { background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
   #result-tap { margin-top: 28px; font-size: 14px; opacity: 0.8; }
-  /* Subtle hint that we're still confirming with server */
-  #result-overlay .confirming { position: absolute; bottom: 70px; font-size: 11px; opacity: 0.6; }
-  #result-overlay .confirming.hidden { display: none; }
+
+  /* Spinner for the "checking" state */
+  .spinner { width: 70px; height: 70px; border: 6px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -112,11 +115,11 @@
   </div>
 </div>
 
+<!-- Result overlay (multi-state: checking → ok/already/invalid/error) -->
 <div id="result-overlay" onclick="hideResult()">
   <div id="result-icon">✓</div>
   <div id="result-title">OK</div>
   <div id="result-detail"></div>
-  <div class="confirming hidden" id="confirming-text">confirming with server…</div>
   <div id="result-tap">Tap to dismiss</div>
 </div>
 
@@ -136,12 +139,13 @@ function beepOk() { playTone(880, 0.15); setTimeout(() => playTone(1320, 0.15), 
 function beepBad() { playTone(220, 0.5, 'square'); }
 function beepUnknown() { playTone(440, 0.3); }
 function beepDetected() { playTone(1500, 0.05); }
+function beepClick() { playTone(2000, 0.04, 'square'); }
 </script>
 
 <script>
 const STAFF_KEY = 'eid_staff_id';
 function getStaff() { return localStorage.getItem(STAFF_KEY); }
-function setStaff(name) { localStorage.setItem(STAFF_KEY, name); ensureAudio(); prewarmServer(); showScanner(); }
+function setStaff(name) { localStorage.setItem(STAFF_KEY, name); ensureAudio(); warmCacheAndStats(); showScanner(); }
 function changeStaff() { if (confirm('Switch staff?')) { localStorage.removeItem(STAFF_KEY); location.reload(); } }
 
 function showScanner() {
@@ -151,7 +155,6 @@ function showScanner() {
   const tag = document.getElementById('staff-tag');
   tag.textContent = getStaff();
   tag.style.display = 'inline-block';
-  refreshCounter();
 }
 
 function setStatus(text, kind) {
@@ -160,8 +163,11 @@ function setStatus(text, kind) {
   if (kind) el.classList.add(kind);
 }
 
-function prewarmServer() {
+// Warm the server cache so the FIRST scan is fast too
+function warmCacheAndStats() {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) return;
+  // Calling rebuild_cache loads the entire codes index into memory on the server
+  fetch(APPS_SCRIPT_URL + '?api=rebuild_cache').then(r => r.json()).catch(() => {});
   fetch(APPS_SCRIPT_URL + '?api=stats').then(r => r.json()).then(data => updateCounters(data)).catch(() => {});
 }
 
@@ -184,31 +190,15 @@ function bumpCounter() {
   if (!isNaN(s)) sEl.textContent = s + 1;
   if (!isNaN(r) && r > 0) rEl.textContent = r - 1;
 }
-
-function unbumpCounter() {
-  // Reverse the optimistic bump if server says scan was NOT actually ok
-  const sEl = document.getElementById('cnt-scanned');
-  const rEl = document.getElementById('cnt-remaining');
-  const s = parseInt(sEl.textContent, 10);
-  const r = parseInt(rEl.textContent, 10);
-  if (!isNaN(s) && s > 0) sEl.textContent = s - 1;
-  if (!isNaN(r)) rEl.textContent = r + 1;
-}
 </script>
 
 <script>
 let scanner = null;
 let cameraReady = false;
+let scanInProgress = false;
 let lastDecodedCode = null;
 let lastDecodedAt = 0;
 let bannerShownRecently = false;
-
-// Track recently-submitted codes so user can't double-tap the same card
-const recentlySubmitted = new Set();
-function rememberSubmission(code) {
-  recentlySubmitted.add(code);
-  setTimeout(() => recentlySubmitted.delete(code), 3000);
-}
 
 function updateDetectedBanner(code) {
   const banner = document.getElementById('detected-banner');
@@ -301,9 +291,9 @@ async function startCameraFlow() {
   }
 }
 
-// ===== OPTIMISTIC TAP-TO-SCAN =====
-// Show OK immediately; verify with server in background; correct if needed.
+// ===== TAP-TO-SCAN: show checking state, wait for server answer, show correct result =====
 function captureAndScan() {
+  if (scanInProgress) return;
   if (!cameraReady) { setStatus('Camera not ready', 'error'); return; }
   if (!lastDecodedCode || (Date.now() - lastDecodedAt) > 2000) {
     setStatus('No QR in view — aim camera at code', 'error');
@@ -312,51 +302,37 @@ function captureAndScan() {
   }
 
   const code = lastDecodedCode;
+  scanInProgress = true;
 
-  // Prevent double-tap on the same card
-  if (recentlySubmitted.has(code)) {
-    return;
-  }
-  rememberSubmission(code);
+  // Show CHECKING overlay immediately so user sees instant feedback
+  showCheckingOverlay(code);
+  beepClick();
 
-  // INSTANT optimistic UI — show OK before server replies
-  showOptimisticOk(code);
-
-  // Clear current code so next scan needs a new QR detection
+  // Clear current detection (require new QR for next scan)
   lastDecodedCode = null;
   updateDetectedBanner(null);
 
-  // Send to server in background — correct UI if result differs
-  submitCodeBackground(code);
+  // Send to server — wait for real answer (no optimistic guess)
+  submitCode(code);
 }
 
-function showOptimisticOk(code) {
+function showCheckingOverlay(code) {
   const overlay = document.getElementById('result-overlay');
   const icon = document.getElementById('result-icon');
   const title = document.getElementById('result-title');
   const detail = document.getElementById('result-detail');
-  const confirming = document.getElementById('confirming-text');
+  const tap = document.getElementById('result-tap');
 
-  overlay.className = 'show ok';
-  icon.textContent = '✓';
-  title.textContent = 'OK — Give Meat';
-  detail.innerHTML = 'Card: <code>' + code + '</code><br>By: ' + (getStaff() || '');
-  confirming.classList.remove('hidden');  // tiny "confirming..." note at bottom
-
-  beepOk();
-  bumpCounter();
-
-  // Auto-dismiss the optimistic OK after 1.5s
-  setTimeout(() => {
-    if (overlay.classList.contains('ok')) {
-      hideResult();
-    }
-  }, 1500);
+  overlay.className = 'show checking';
+  icon.innerHTML = '<div class="spinner"></div>';
+  title.textContent = 'Checking…';
+  detail.innerHTML = '<code>' + code + '</code>';
+  tap.style.display = 'none';
 }
 
-async function submitCodeBackground(code) {
+async function submitCode(code) {
   if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR_APPS_SCRIPT_URL') === 0) {
-    correctResultOverlay({ result: 'error', message: 'Apps Script URL not configured.' });
+    showResult({ result: 'error', message: 'Apps Script URL not configured.' });
     return;
   }
   try {
@@ -364,41 +340,39 @@ async function submitCodeBackground(code) {
     const resp = await fetch(url, { method: 'GET', redirect: 'follow' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
-    correctResultOverlay(json);
+    showResult(json);
   } catch (err) {
-    correctResultOverlay({ result: 'error', message: err.message || String(err) });
+    showResult({ result: 'error', message: err.message || String(err) });
   }
 }
 
-// If server result differs from our optimistic OK, correct the overlay
-function correctResultOverlay(res) {
+function showResult(res) {
+  scanInProgress = false;
+  if (!res) { res = { result: 'error', message: 'Empty response' }; }
   const overlay = document.getElementById('result-overlay');
-  const confirming = document.getElementById('confirming-text');
-
-  // Hide "confirming…" once we have a real answer
-  confirming.classList.add('hidden');
-
-  if (!res || res.result === 'ok') {
-    // Optimistic was correct — nothing to do
-    return;
-  }
-
-  // Server disagreed — show the real result
-  // First reverse the bumped counter (since this scan wasn't actually new)
-  unbumpCounter();
-
   const icon = document.getElementById('result-icon');
   const title = document.getElementById('result-title');
   const detail = document.getElementById('result-detail');
+  const tap = document.getElementById('result-tap');
 
   overlay.className = 'show';
+  tap.style.display = 'block';
 
-  if (res.result === 'already') {
+  if (res.result === 'ok') {
+    overlay.classList.add('ok');
+    icon.textContent = '✓';
+    title.textContent = 'OK — Give Meat';
+    detail.innerHTML = 'Card: <code>' + (res.code || '') + '</code><br>By: ' + (res.scannedBy || '');
+    beepOk();
+    bumpCounter();
+    setTimeout(hideResult, 1800);
+  } else if (res.result === 'already') {
     overlay.classList.add('already');
     icon.textContent = '⚠';
     title.textContent = 'ALREADY CONTRIBUTED';
     detail.innerHTML = 'Scanned at:<br><b>' + (res.scannedAt || '') + '</b><br>by ' + (res.scannedBy || '') + '<br><br>Card: <code>' + (res.code || '') + '</code>';
     beepBad();
+    // Don't auto-dismiss — staff must acknowledge
   } else if (res.result === 'invalid') {
     overlay.classList.add('invalid');
     icon.textContent = '?';
@@ -412,17 +386,17 @@ function correctResultOverlay(res) {
     detail.textContent = res.message || 'Unknown error';
     beepUnknown();
   }
-  // For error/already, don't auto-dismiss — let staff tap to acknowledge
 }
 
 function submitManual() {
   const v = document.getElementById('manual-input').value.trim();
   if (!v) return;
   document.getElementById('manual-input').value = '';
-  if (recentlySubmitted.has(v)) return;
-  rememberSubmission(v);
-  showOptimisticOk(v);
-  submitCodeBackground(v);
+  if (scanInProgress) return;
+  scanInProgress = true;
+  showCheckingOverlay(v);
+  beepClick();
+  submitCode(v);
 }
 
 document.addEventListener('keydown', e => {
@@ -432,15 +406,13 @@ document.addEventListener('keydown', e => {
   }
 });
 
-function hideResult() {
-  document.getElementById('result-overlay').classList.remove('show');
-}
+function hideResult() { document.getElementById('result-overlay').classList.remove('show'); }
 
 window.addEventListener('load', () => {
-  if (getStaff()) { ensureAudio(); prewarmServer(); showScanner(); }
+  if (getStaff()) { ensureAudio(); warmCacheAndStats(); showScanner(); }
 });
 
-setInterval(() => { if (getStaff()) refreshCounter(); }, 30000);
+setInterval(() => { if (getStaff() && !scanInProgress) refreshCounter(); }, 30000);
 </script>
 
 </body>
